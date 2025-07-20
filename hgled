@@ -1,0 +1,90 @@
+#!/bin/bash
+# Internet Detection Indicator for HG680P Wrapper
+# Powered by Lutfa Ilham
+# Modified by Alfin Hidayatullah
+# v1.0
+
+if [ "$(id -u)" != "0" ]; then
+  echo "This script must be run as root" 1>&2
+  exit 1
+fi
+
+SERVICE_NAME="Internet Detection Indicator"
+
+# ganti bug.com menjadi bug yang sesungguhnya dan pastikan bug didirect ke modem (Jangan Menggunakan Tunnel)
+# sesuaikan count_reboot untuk melakukan reboot stb secara otomatis jika terdapat koneksi yang down secara terus-menerus
+# sesuaikan nama interface stb agar dapat merestart interface stb yang di inginkan
+bugdirect="bug.com"
+count_reboot=5
+nama_intervace_wan="wan0"
+
+count_down=0
+function loop() {
+  while true; do
+    hgledon -lan dis
+    curl -s -o /dev/null -w "%{http_code}" --max-time 3 -L -k ${bugdirect} > /tmp/cekledon 2>/dev/null
+    HTTP_CODE=$(cat /tmp/cekledon)
+    if [ "$HTTP_CODE" == "000" ] || [ "$HTTP_CODE" == "302" ]; then
+      hgledon -lan off
+      # ini memastikan bahwa benar-benar tidak ada koneksi.
+      curl -s -o /dev/null -w "%{http_code}" --max-time 3 -L -k google.com > /tmp/ceksecond 2>/dev/null
+      HTTP_SECOND=$(cat /tmp/ceksecond)
+      if [ "$HTTP_SECOND" == "000" ]; then
+        # Jika HTTP_SECOND == "000", tambahkan count_down
+        count_down=$((count_down + 1))
+
+        if [ $count_down -ge $count_reboot ]; then
+          # Aksi Restart STB Saat Koneksi Gagal Terus Menerus Sebanyak 5x (Terkadang Untuk Modem DW5821e Tidak Dapat Terdeteksi kecuali dengan reboot STB)
+          reboot
+          exit 0
+        else
+          # Tindakan Restart Modem Dan Intervace (Command Untuk Modem Dw5821e)
+          # Isi Nama Intervace Setelah Kata ifdown dan setelah kata ifup untuk merestart intervacenya. (dalam contoh ini kata "rakitan")
+          # Tindakan ini bisa disesuaikan (diganti) dengan command untuk restart masing-masing modem
+          echo AT+CFUN=4 | atinout - /dev/ttyUSB0 - && ifdown ${nama_intervace_wan} && sleep 3 && AT+CFUN=1 | atinout - /dev/ttyUSB0 - && ifup ${nama_intervace_wan} &
+          sleep 15
+        fi
+      fi
+    else
+      hgledon -lan on
+      # Reset hitungan jika sebelumnya down
+      if [ $count_down -gt 0 ]; then
+        count_down=0
+      fi
+    fi
+    sleep 1
+  done
+}
+
+function start() {
+  echo -e "Starting ${SERVICE_NAME} service ..."
+  screen -AmdS internet-detection-indicator "${0}" -l
+}
+
+function stop() {
+  echo -e "Stopping ${SERVICE_NAME} service ..."
+  kill $(screen -list | grep internet-detection-indicator | awk -F '[.]' {'print $1'})
+}
+
+function usage() {
+  cat <<EOF
+Gunakan:
+  -r  Run ${SERVICE_NAME} service
+  -s  Stop ${SERVICE_NAME} service
+EOF
+}
+
+case "${1}" in
+  -l)
+    loop
+    ;;
+  -r)
+    start
+    ;;
+  -s)
+    stop
+    ;;
+  *)
+    usage
+    ;;
+esac

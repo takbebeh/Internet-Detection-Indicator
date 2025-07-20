@@ -1,2 +1,5 @@
 # Internet-Detection-Indicator
-Script Deteksi Internet Untuk Stb HG680P x905s OpenWRT
+✅ Cek Koneksi Internet.<br>
+✅ Melakukan Pergantian IP Modem Rakitan Khususnya DW5821e.<br>
+✅ Reboot STB jiika koneksi terputus secara terus menerus.<br>
+✅ Support Reyre-WRT.<br>
